@@ -1,0 +1,113 @@
+# Fork-only: builds MPVUI's libmpv with the spatial audio output and publishes it as a release on
+# kristofferR/MPVUI. Never offered upstream.
+name: SAB libmpv
+
+on:
+  push:
+    branches: [ci/libmpv]
+    tags-ignore: ['**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sab-libmpv
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.repository == 'kristofferR/MPVUI'
+    runs-on: macos-26
+    timeout-minutes: 240
+    permissions:
+      contents: write
+    env:
+      TAG: 0.6.0-sab.${{ github.run_number }}
+      SLICES: tvos,tvsimulator
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          want=$(python3 -c 'import json; print(json.load(open("Build/Inputs.lock.json"))["toolchain"]["xcode"]["build"])')
+          echo "Lock wants Xcode build $want"
+          selected=""
+          for app in /Applications/Xcode_27.0*.app /Applications/Xcode*.app; do
+            [ -d "$app" ] || continue
+            build=$(/usr/libexec/PlistBuddy -c 'Print ProductBuildVersion' "$app/Contents/version.plist")
+            if [ "$build" = "$want" ]; then selected="$app"; break; fi
+          done
+          if [ -z "$selected" ]; then
+            selected=$(ls -d /Applications/Xcode_27.0*.app 2>/dev/null | head -1)
+            [ -n "$selected" ] || selected=$(ls -d /Applications/Xcode_27*.app | sort -V | head -1)
+            echo "::warning::Xcode build $want not found; using $selected and overriding the lock in CI"
+          fi
+          echo "DEVELOPER_DIR=$selected/Contents/Developer" >> "$GITHUB_ENV"
+          echo "Selected $selected"
+
+      - name: Install nasm and glslc
+        run: |
+          curl -fsSL -o nasm.tar.xz https://www.nasm.us/pub/nasm/releasebuilds/3.02/nasm-3.02.tar.xz
+          tar -xf nasm.tar.xz
+          (cd nasm-3.02 && ./configure --prefix="$HOME/sab-tools" >/dev/null && make -j"$(sysctl -n hw.ncpu)" >/dev/null && make install >/dev/null)
+          echo "$HOME/sab-tools/bin" >> "$GITHUB_PATH"
+          brew install shaderc
+          "$HOME/sab-tools/bin/nasm" -v
+          glslc --version
+
+      - name: Match the lock to this runner
+        run: |
+          python3 - <<'EOF'
+          import json, os, subprocess
+          path = "Build/Inputs.lock.json"
+          lock = json.load(open(path))
+          lock["publication"]["repository"] = "kristofferR/MPVUI"
+          xcode, tools = lock["toolchain"]["xcode"], lock["toolchain"]["tools"]
+          app = os.path.dirname(os.environ["DEVELOPER_DIR"])
+          plist = lambda name, key: subprocess.run(
+              ["/usr/libexec/PlistBuddy", "-c", f"Print {key}", os.path.join(app, name)], capture_output=True, text=True
+          ).stdout.strip()
+          first_line = lambda cmd: subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True).stdout.splitlines()[0]
+          actual_xcode = {
+              "version": plist("Info.plist", "CFBundleShortVersionString"),
+              "build": plist("version.plist", "ProductBuildVersion"),
+              "swift": first_line(["/usr/bin/swiftc", "--version"]),
+              "clang": first_line(["/usr/bin/clang", "--version"]),
+          }
+          glslc = subprocess.run(["glslc", "--version"], capture_output=True, text=True).stdout.rstrip("\n")
+          overrides = []
+          for key, value in actual_xcode.items():
+              if xcode.get(key) != value:
+                  overrides.append(f"xcode.{key}: {xcode.get(key)!r} -> {value!r}")
+                  xcode[key] = value
+          if tools.get("glslc") != glslc:
+              overrides.append(f"tools.glslc: {tools.get('glslc')!r} -> {glslc!r}")
+              tools["glslc"] = glslc
+          with open(path, "w") as f:
+              json.dump(lock, f, indent=2)
+              f.write("\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("### Lock overrides in CI\n\n" + ("\n".join(f"- `{o}`" for o in overrides) or "None") + "\n")
+          print("\n".join(overrides) or "No overrides")
+          EOF
+
+      - name: Build
+        run: make build ARGS="--profile release --slices $SLICES --arch arm64 --tag $TAG" | tee build.jsonl
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          candidate=$(python3 -c 'import json,sys; [print(json.loads(l)["artifacts"]["nativeCandidate"]) for l in open("build.jsonl") if "nativeCandidate" in l]' | tail -1)
+          echo "Candidate: $candidate"
+          ls -la "$candidate"
+          zip=$(find "$candidate" -name 'Libmpv.xcframework.zip' | head -1)
+          checksum=$(swift package compute-checksum "$zip")
+          echo "### Libmpv for $TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "Checksum: \`$checksum\`" >> "$GITHUB_STEP_SUMMARY"
+          assets=("$zip")
+          while IFS= read -r f; do assets+=("$f"); done < <(find "$candidate" -name '*.lock.json' -o -name 'build-record.json' | head -5)
+          cp Build/Inputs.lock.json ci-Inputs.lock.json && assets+=(ci-Inputs.lock.json)
+          gh release create "$TAG" "${assets[@]}" --repo kristofferR/MPVUI --target "$GITHUB_SHA" --prerelease \
+            --title "$TAG" --notes "Fork-only libmpv build of ${GITHUB_SHA::8} with the spatial audio output. Slices: $SLICES. Checksum: $checksum"
