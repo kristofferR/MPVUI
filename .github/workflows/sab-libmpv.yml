@@ -100,10 +100,10 @@ jobs:
                   del sdks[name]
                   continue
               found = subprocess.run(["xcrun", "--sdk", name, "--show-sdk-path"], capture_output=True, text=True, check=True)
-              path = found.stdout.strip()
+              sdk_path = found.stdout.strip()
               actual = {
-                  "build": plistlib.load(open(os.path.join(path, "System/Library/CoreServices/SystemVersion.plist"), "rb"))["ProductBuildVersion"],
-                  "version": json.load(open(os.path.join(path, "SDKSettings.json")))["Version"],
+                  "build": plistlib.load(open(os.path.join(sdk_path, "System/Library/CoreServices/SystemVersion.plist"), "rb"))["ProductBuildVersion"],
+                  "version": json.load(open(os.path.join(sdk_path, "SDKSettings.json")))["Version"],
               }
               if sdks[name] != actual:
                   overrides.append(f"sdks.{name}: {sdks[name]} -> {actual}")
