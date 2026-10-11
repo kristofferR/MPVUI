@@ -95,7 +95,9 @@ jobs:
           EOF
 
       - name: Build
-        run: make build ARGS="--profile release --slices $SLICES --arch arm64 --tag $TAG" | tee build.jsonl
+        run: |
+          set -o pipefail
+          make build PROFILE=release ARGS="--slices $SLICES --arch arm64 --tag $TAG" | tee build.jsonl
 
       - name: Publish release
         env:
