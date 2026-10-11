@@ -52,10 +52,10 @@ jobs:
         run: |
           curl -fsSL -o nasm.tar.xz https://www.nasm.us/pub/nasm/releasebuilds/3.02/nasm-3.02.tar.xz
           tar -xf nasm.tar.xz
-          (cd nasm-3.02 && ./configure --prefix="$HOME/sab-tools" >/dev/null && make -j"$(sysctl -n hw.ncpu)" >/dev/null && make install >/dev/null)
-          echo "$HOME/sab-tools/bin" >> "$GITHUB_PATH"
+          # mpvbuild runs tools from its own PATH, which includes /opt/homebrew/bin but not this job's.
+          (cd nasm-3.02 && ./configure --prefix=/opt/homebrew >/dev/null && make -j"$(sysctl -n hw.ncpu)" >/dev/null && make install >/dev/null)
           brew install shaderc
-          "$HOME/sab-tools/bin/nasm" -v
+          /opt/homebrew/bin/nasm -v
           glslc --version
 
       - name: Match the lock to this runner
