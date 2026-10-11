@@ -23,7 +23,7 @@ jobs:
       contents: write
     env:
       TAG: 0.6.0-sab.${{ github.run_number }}
-      SLICES: tvos,tvsimulator
+      SLICES: tvos,tvsimulator,ios
     steps:
       - uses: actions/checkout@v5
 
@@ -97,7 +97,8 @@ jobs:
       - name: Build
         run: |
           set -o pipefail
-          make build PROFILE=release ARGS="--slices $SLICES --arch arm64 --tag $TAG" | tee build.jsonl
+          # The release profile builds every slice; the dev profile builds only these, with the same recipes.
+          make build ARGS="--slices $SLICES --arch arm64" | tee build.jsonl
 
       - name: Publish release
         env:
