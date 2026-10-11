@@ -86,6 +86,23 @@ jobs:
           if tools.get("glslc") != glslc:
               overrides.append(f"tools.glslc: {tools.get('glslc')!r} -> {glslc!r}")
               tools["glslc"] = glslc
+          import plistlib
+          sdks = lock["toolchain"]["sdks"]
+          for name in list(sdks):
+              found = subprocess.run(["xcrun", "--sdk", name, "--show-sdk-path"], capture_output=True, text=True)
+              if found.returncode != 0:
+                  overrides.append(f"sdks.{name}: removed with its slices, not installed")
+                  del sdks[name]
+                  lock["slices"] = [s for s in lock["slices"] if s["sdk"] != name]
+                  continue
+              path = found.stdout.strip()
+              actual = {
+                  "build": plistlib.load(open(os.path.join(path, "System/Library/CoreServices/SystemVersion.plist"), "rb"))["ProductBuildVersion"],
+                  "version": json.load(open(os.path.join(path, "SDKSettings.json")))["Version"],
+              }
+              if sdks[name] != actual:
+                  overrides.append(f"sdks.{name}: {sdks[name]} -> {actual}")
+                  sdks[name] = actual
           with open(path, "w") as f:
               json.dump(lock, f, indent=2)
               f.write("\n")
