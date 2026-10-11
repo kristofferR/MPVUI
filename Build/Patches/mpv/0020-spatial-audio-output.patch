@@ -36,7 +36,7 @@ new file mode 100644
 index 0000000..a862222
 --- /dev/null
 +++ b/audio/out/ao_spatial.m
-@@ -0,0 +1,309 @@
+@@ -0,0 +1,312 @@
 +/*
 + * This file is part of mpv.
 + *
@@ -283,6 +283,9 @@ index 0000000..a862222
 +{
 +    struct priv *p = ao->priv;
 +
++    // ao_alloc() sets the gain before init() has opened the host.
++    if (!p->queue)
++        return;
 +    p->sink->set_volume(p->sink->ctx, gain);
 +}
 +
