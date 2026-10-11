@@ -39,8 +39,10 @@ jobs:
             if [ "$build" = "$want" ]; then selected="$app"; break; fi
           done
           if [ -z "$selected" ]; then
-            selected=$(ls -d /Applications/Xcode_27.0*.app 2>/dev/null | head -1)
-            [ -n "$selected" ] || selected=$(ls -d /Applications/Xcode_27*.app | sort -V | head -1)
+            # GitHub's images may not have the locked Xcode yet: take the newest, and the next step
+            # overrides the lock's Xcode entries in CI only.
+            selected=$(ls -d /Applications/Xcode_2[7-9]*.app /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+            [ -n "$selected" ] || { echo "::error::No usable Xcode on this runner"; exit 1; }
             echo "::warning::Xcode build $want not found; using $selected and overriding the lock in CI"
           fi
           echo "DEVELOPER_DIR=$selected/Contents/Developer" >> "$GITHUB_ENV"
