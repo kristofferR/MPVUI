@@ -94,6 +94,9 @@ jobs:
           print("\n".join(overrides) or "No overrides")
           EOF
 
+      - name: Bootstrap the locked build tools
+        run: make doctor
+
       - name: Build
         run: |
           set -o pipefail
