@@ -239,11 +239,16 @@ extension MPVEngine {
     func setPlaybackRate(_ rate: Double) {
         guard rate > 0 else { return }
         setProperty("speed", to: Self.format(clamp(rate, to: 0.01 ... 100)))
+        queue.async { [weak self] in
+            self?.applySpdifCodecs(reloadingAudio: true)
+        }
     }
 
     func loadPendingSourceIfPossible() {
         dispatchPrecondition(condition: .onQueue(queue))
         guard needsSourceLoad, handle != nil, let sourceURL else { return }
+
+        resetPassthroughFallback()
 
         var arguments = ["loadfile", Self.mpvPath(for: sourceURL), "replace"]
         if let start = pendingStartTime, start > .zero {

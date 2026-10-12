@@ -14,6 +14,7 @@ enum MPVOptionOwnership {
         "avfoundation-presentation",
         "avfoundation-pip-composite-osd",
         "avfoundation-subtitle-luminance",
+        "ao-spatial-sink",
         "gpu-api",
         "gpu-context",
         "mute",
