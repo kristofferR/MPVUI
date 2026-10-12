@@ -14,6 +14,11 @@ extension MPVEngine {
         if id.type == .subtitle {
             selectSubtitle(id, for: .primary)
         } else {
+            if id.type == .audio {
+                queue.async { [weak self] in
+                    self?.resetPassthroughFallback()
+                }
+            }
             setProperty(Self.selectionProperty(for: id.type), to: String(id.mpvID))
         }
     }
