@@ -107,6 +107,14 @@ final class MPVEngine: @unchecked Sendable {
     var colorUpdateHasNativeFence = false
     var videoToolboxSessionUsesHardware: Bool?
 
+    // MARK: - Passthrough audio
+
+    /// Hands TrueHD and DTS-HD to ``MPVAudioConfiguration/passthroughSink``. It outlives every handle, which
+    /// keeps its address.
+    var passthroughSinkBridge: MPVPassthroughAudioSinkBridge?
+    /// Codecs decoded to PCM since the sink failed on them, until the next track or file loads.
+    var passthroughFallbackCodecs: Set<MPVPassthroughAudioCodec> = []
+
     // MARK: - Initialization and teardown
 
     init(configuration: MPVPlayerConfiguration, sink: @escaping Sink) {
@@ -138,6 +146,11 @@ final class MPVEngine: @unchecked Sendable {
             self.drainEvents()
         }
         eventDrainSource.activate()
+        passthroughSinkBridge = configuration.audio.passthroughSink.map { sink in
+            MPVPassthroughAudioSinkBridge(sink: sink) { [weak self] codec, session in
+                self?.queue.async { self?.fallBackToPCM(codec, session: session) }
+            }
+        }
     }
 
     deinit {
