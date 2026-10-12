@@ -2,32 +2,43 @@ import Foundation
 
 extension MPVEngine {
 
-    /// mpv's `audio-spdif` with a passthrough sink. TrueHD and DTS-HD go to the sink only at rate 1, because it
-    /// renders at the synchronizer's normal rate, and not after it failed on them.
+    /// mpv's `audio-spdif` with a passthrough sink: the configured codecs, plus TrueHD and DTS-HD for the sink at
+    /// rate 1, because it renders at the synchronizer's normal rate. A codec the sink failed on stays out until
+    /// another track or file loads.
     var spdifCodecs: String {
-        let base = configuration.audio.mpvOptions["audio-spdif"] ?? ""
+        let configured = desiredProperties["audio-spdif"] ?? configuration.additionalOptions["audio-spdif"]
+            ?? configuration.audio.mpvOptions["audio-spdif"] ?? ""
         let rate = desiredProperties["speed"].flatMap(Double.init) ?? configuration.playbackRate
-        guard passthroughSinkBridge != nil, rate == 1 else { return base }
+        guard passthroughSinkBridge != nil, rate == 1 else { return configured }
         let sinkCodecs = [MPVPassthroughAudioCodec.trueHD, .dtsHD]
-            .filter { !passthroughFallbackCodecs.contains($0) }
+            .filter { $0 != passthroughFallback?.codec }
             .map(\.spdifName)
-        return ([base] + sinkCodecs).filter { !$0.isEmpty }.joined(separator: ",")
+        return ([configured] + sinkCodecs).filter { !$0.isEmpty }.joined(separator: ",")
     }
 
-    /// Decodes `codec` to PCM after the passthrough sink failed on it, until the next track or file loads. Ignores
-    /// a fallback from an output mpv has since closed.
+    /// Decodes the current track to PCM after the passthrough sink failed on it. Ignores a fallback from an output
+    /// mpv has since closed.
     func fallBackToPCM(_ codec: MPVPassthroughAudioCodec, session: Int) {
         dispatchPrecondition(condition: .onQueue(queue))
-        guard passthroughSinkBridge?.isOpen(session) == true, passthroughFallbackCodecs.insert(codec).inserted else {
-            return
-        }
+        guard passthroughSinkBridge?.isOpen(session) == true, passthroughFallback?.codec != codec else { return }
+        passthroughFallback = (getInt64("current-tracks/audio/id"), codec)
         applySpdifCodecs(reloadingAudio: true)
     }
 
-    /// Offers TrueHD and DTS-HD to the passthrough sink again, before a track or file loads.
+    /// Offers TrueHD and DTS-HD to the passthrough sink again when another audio track is selected, by any means.
+    func passthroughAudioTrackDidChange() {
+        dispatchPrecondition(condition: .onQueue(queue))
+        guard let fallback = passthroughFallback, let track = getInt64("current-tracks/audio/id"),
+              track != fallback.track
+        else { return }
+        passthroughFallback = nil
+        applySpdifCodecs(reloadingAudio: true)
+    }
+
+    /// Offers TrueHD and DTS-HD to the passthrough sink again before a file loads.
     func resetPassthroughFallback() {
         dispatchPrecondition(condition: .onQueue(queue))
-        passthroughFallbackCodecs.removeAll()
+        passthroughFallback = nil
         applySpdifCodecs(reloadingAudio: false)
     }
 

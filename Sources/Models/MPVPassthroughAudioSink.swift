@@ -9,8 +9,8 @@ import CoreMedia
 /// ``open(codec:synchronizer:fallback:)``: render into it, and playback waits until ``isReady`` is true.
 /// Other codecs, and these at a playback rate other than 1, still play through mpv's own audio output.
 ///
-/// mpv calls these methods on its audio thread, never concurrently, except ``setVolume(_:)``, which it calls
-/// on its core thread.
+/// mpv serializes these calls, though not on one thread: opening, closing and resets run outside its audio
+/// thread. ``setVolume(_:)`` comes from its core thread, concurrently with the others.
 public protocol MPVPassthroughAudioSink: AnyObject, Sendable {
 
     /// Prepares to render `codec` into `synchronizer`, which stays valid until ``close()``.

@@ -411,6 +411,9 @@ extension MPVEngine {
              "audio-codec-name", "file-format", "file-size",
              "container-fps":
             refreshPropertySnapshot(.media)
+            if name == "current-tracks/audio/id" {
+                passthroughAudioTrackDidChange()
+            }
             if name == "track-list" || name == "current-tracks/sub/id" {
                 flushPropertySnapshots()
                 refreshTextSubtitleSnapshot()

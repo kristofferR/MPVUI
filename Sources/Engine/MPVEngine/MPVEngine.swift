@@ -112,8 +112,8 @@ final class MPVEngine: @unchecked Sendable {
     /// Hands TrueHD and DTS-HD to ``MPVAudioConfiguration/passthroughSink``. It outlives every handle, which
     /// keeps its address.
     var passthroughSinkBridge: MPVPassthroughAudioSinkBridge?
-    /// Codecs decoded to PCM since the sink failed on them, until the next track or file loads.
-    var passthroughFallbackCodecs: Set<MPVPassthroughAudioCodec> = []
+    /// The audio track the sink failed on, decoded to PCM until another track or file loads.
+    var passthroughFallback: (track: Int64?, codec: MPVPassthroughAudioCodec)?
 
     // MARK: - Initialization and teardown
 
