@@ -1,11 +1,17 @@
-# Fork-only: builds MPVUI's libmpv with the spatial audio output and publishes it as a release on
-# kristofferR/MPVUI. Never offered upstream.
+# Fork-only: builds MPVUI's libmpv with the spatial audio output, tests the passthrough sink on macOS, and
+# publishes the build as a release on kristofferR/MPVUI when dispatched with publish. Never offered upstream.
 name: SAB libmpv
 
 on:
   push:
     branches: [ci/libmpv]
     tags-ignore: ['**']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the build as a release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -23,7 +29,7 @@ jobs:
       contents: write
     env:
       TAG: 0.6.0-sab.${{ github.run_number }}
-      SLICES: tvos,tvsimulator,ios
+      SLICES: tvos,tvsimulator,ios,macos
     steps:
       - uses: actions/checkout@v5
 
@@ -115,7 +121,15 @@ jobs:
           # The release profile builds every slice; the dev profile builds only these, with the same recipes.
           make build ARGS="--slices $SLICES --arch arm64" | tee build.jsonl
 
+      - name: Test the passthrough sink
+        run: |
+          brew install ffmpeg webp dovi_tool
+          candidate=$(python3 -c 'import json; [print(json.loads(l)["artifacts"]["nativeCandidate"]) for l in open("build.jsonl") if "nativeCandidate" in l]' | tail -1)
+          make use-local ARGS="--artifact $candidate"
+          make test-swift ARGS="--filter MPVPassthroughAudioSinkTests"
+
       - name: Publish release
+        if: inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
