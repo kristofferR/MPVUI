@@ -29,7 +29,6 @@ jobs:
       contents: write
     env:
       TAG: 0.6.0-sab.${{ github.run_number }}
-      SLICES: tvos,tvsimulator,ios,macos
     steps:
       - uses: actions/checkout@v5
 
@@ -118,8 +117,8 @@ jobs:
       - name: Build
         run: |
           set -o pipefail
-          # The release profile builds every slice; the dev profile builds only these, with the same recipes.
-          make build ARGS="--slices $SLICES --arch arm64" | tee build.jsonl
+          # Every slice and architecture the package declares, as in MPVUI's own releases.
+          make build PROFILE=release | tee build.jsonl
 
       - name: Test the passthrough sink
         run: |
@@ -144,4 +143,4 @@ jobs:
           while IFS= read -r f; do assets+=("$f"); done < <(find "$candidate" -name '*.lock.json' -o -name 'build-record.json' | head -5)
           cp Build/Inputs.lock.json ci-Inputs.lock.json && assets+=(ci-Inputs.lock.json)
           gh release create "$TAG" "${assets[@]}" --repo kristofferR/MPVUI --target "$GITHUB_SHA" --prerelease \
-            --title "$TAG" --notes "Fork-only libmpv build of ${GITHUB_SHA::8} with the spatial audio output. Slices: $SLICES. Checksum: $checksum"
+            --title "$TAG" --notes "Fork-only libmpv build of ${GITHUB_SHA::8} with the spatial audio output, all slices. Checksum: $checksum"
