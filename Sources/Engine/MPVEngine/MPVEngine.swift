@@ -148,7 +148,8 @@ final class MPVEngine: @unchecked Sendable {
         eventDrainSource.activate()
         passthroughSinkBridge = configuration.audio.passthroughSink.map { sink in
             MPVPassthroughAudioSinkBridge(sink: sink) { [weak self] codec, session in
-                self?.queue.async { self?.fallBackToPCM(codec, session: session) }
+                guard let self else { return }
+                self.queue.async { self.fallBackToPCM(codec, session: session) }
             }
         }
     }
